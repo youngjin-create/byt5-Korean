@@ -17,5 +17,4 @@ class KoreanDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, i):
-        # We’ll pad at the batch level.
-        return torch.tensor(self.examples[i])
+        return { 'input_ids': torch.tensor(self.examples[i]), 'label': torch.tensor([0]) }

@@ -1,5 +1,6 @@
 
 from transformers import T5Config, T5Model, TrainingArguments, Trainer
+import mydataset
 
 model_path = './byT5-Korean-large'
 
@@ -53,7 +54,11 @@ training_args = TrainingArguments(
 trainer = Trainer(
     model=model,
     args=training_args,
-    data_collator=data_collator, # 미구현
-    train_dataset=train_dataset, # 미구현
-    eval_dataset=test_dataset, # 미구현
+    # data_collator=data_collator,
+    train_dataset=mydataset.KoreanDataset(evaluate=False),
+    eval_dataset=mydataset.KoreanDataset(evaluate=True),
 )
+
+trainer.train()
+
+a = 0
