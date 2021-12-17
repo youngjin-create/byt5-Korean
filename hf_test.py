@@ -4,6 +4,10 @@ import torch
 model = T5ForConditionalGeneration.from_pretrained('google/byt5-large')
 tokenizer = AutoTokenizer.from_pretrained('google/byt5-large')
 
+# huggingface tokenizer는 <extra_id_0>이 259, 학습된 구글 모델에서는 258
+input_ids = tokenizer("양진호는 한국의 도시 서울에서 <extra_id_0> 입니다.").input_ids
+outputs = model.generate(torch.tensor([input_ids])) # output값이 제대로 나오지 않음
+
 input_ids = list("양진호는 한국의 도시 서울에서 ".encode("utf-8")) + list(b'\xff') + list("입니다.".encode("utf-8"))
 input_ids.append(-2) # end of sequence = 1
 input_ids = torch.tensor([input_ids]) + 3

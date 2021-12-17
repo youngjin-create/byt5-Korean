@@ -5,7 +5,7 @@ tokenizer = AutoTokenizer.from_pretrained('google/byt5-large')
 
 from Korpora import Korpora
 corpus = Korpora.load("kowikitext")
-ids = tokenizer(corpus.train.texts).input_ids
+ids = tokenizer(corpus.train.texts, padding=True, truncation=True, max_length=16).input_ids
 ids_train = ids[:int(len(ids)*0.8)]
 ids_eval = ids[int(len(ids)*0.8):]
 
@@ -17,4 +17,6 @@ class KoreanDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, i):
-        return { 'input_ids': torch.tensor(self.examples[i]), 'label': torch.tensor([0]) }
+        return { 'input_ids': torch.tensor(self.examples[i]), 'labels': torch.tensor(self.examples[i]) }
+        # return { 'input_ids': torch.tensor(self.examples[i]), 'decoder_input_ids': torch.tensor(self.examples[i]), 'label_ids': torch.tensor(self.examples[i]) }
+        # return { 'input_ids': torch.tensor(self.examples[i]), 'label_ids': torch.tensor([0]) }
