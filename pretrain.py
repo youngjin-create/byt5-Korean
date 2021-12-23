@@ -71,32 +71,36 @@ model_config_large = {
 # >>> outputs = model(input_ids=input_ids, labels=labels)
 # >>> loss = outputs.loss
 # >>> logits = outputs.logits
+def main():
+    model_config = T5Config(**model_config_small)
+    # model = T5Model(config=model_config) # 그냥 T5 모델로 하면 안되고 T5ForConditionalGeneration를 사용해야 함
+    model = T5ForConditionalGeneration(config=model_config)
 
-model_config = T5Config(**model_config_small)
-# model = T5Model(config=model_config) # 그냥 T5 모델로 하면 안되고 T5ForConditionalGeneration를 사용해야 함
-model = T5ForConditionalGeneration(config=model_config)
+    training_args = TrainingArguments(
+        output_dir=model_path,          # output directory to where save model checkpoint
+        evaluation_strategy="steps",    # evaluate each `logging_steps` steps
+        overwrite_output_dir=True,      
+        num_train_epochs=100,            # number of training epochs, feel free to tweak
+        per_device_train_batch_size=10, # the training batch size, put it as high as your GPU memory fits
+        gradient_accumulation_steps=8,  # accumulating the gradients before updating the weights
+        per_device_eval_batch_size=64,  # evaluation batch size
+        logging_steps=500,              # evaluate, log and save model checkpoints every 1000 step
+        save_steps=500,
+        load_best_model_at_end=True,    # whether to load the best model (in terms of loss) at the end of training
+        save_total_limit=3,             # whether you don't have much space so you let only 3 model weights saved in the disk
+    )
 
-training_args = TrainingArguments(
-    output_dir=model_path,          # output directory to where save model checkpoint
-    evaluation_strategy="steps",    # evaluate each `logging_steps` steps
-    overwrite_output_dir=True,      
-    num_train_epochs=10,            # number of training epochs, feel free to tweak
-    per_device_train_batch_size=10, # the training batch size, put it as high as your GPU memory fits
-    gradient_accumulation_steps=8,  # accumulating the gradients before updating the weights
-    per_device_eval_batch_size=64,  # evaluation batch size
-    logging_steps=500,             # evaluate, log and save model checkpoints every 1000 step
-    save_steps=500,
-    # load_best_model_at_end=True,  # whether to load the best model (in terms of loss) at the end of training
-    # save_total_limit=3,           # whether you don't have much space so you let only 3 model weights saved in the disk
-)
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        # data_collator=data_collator,
+        # data_collator=DataCollatorForSeq2Seq(tokenizer=AutoTokenizer.from_pretrained('google/byt5-large'), model='google/byt5-large'),
+        train_dataset=mydataset.KoreanDataset(evaluate=False),
+        eval_dataset=mydataset.KoreanDataset(evaluate=True),
+    )
 
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    # data_collator=data_collator,
-    # data_collator=DataCollatorForSeq2Seq(tokenizer=AutoTokenizer.from_pretrained('google/byt5-large'), model='google/byt5-large'),
-    train_dataset=mydataset.KoreanDataset(evaluate=False),
-    eval_dataset=mydataset.KoreanDataset(evaluate=True),
-)
+    trainer.train()
 
-trainer.train()
+if __name__ == "__main__":
+    main()
+    print("Done")
