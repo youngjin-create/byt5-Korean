@@ -14,14 +14,17 @@ from transformers import TrainingArguments, Trainer
 from transformers import BertTokenizer, BertForSequenceClassification
 from transformers import EarlyStoppingCallback
 #from transformers import T5ForConditionalGeneration, AutoTokenizer
-from transformers import MT5ForConditionalGeneration, MT5TokenizerFast
+
+#from transformers import MT5ForConditionalGeneration, MT5TokenizerFast
+from transformers import T5ForConditionalGeneration, AutoTokenizer
+
 # from transformers  import MT5Model, T5Tokenizer
 
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 import wandb
-wandb.init(project="hug_ape210k", name="mt5")
+wandb.init(project="hug_ape210k", name="byt5")
            #tags=["baseline", "high-lr"],
            #group="bert"
 
@@ -54,9 +57,11 @@ class Dataset(torch.utils.data.Dataset):
 # model = BertForSequenceClassification.from_pretrained(model_name, num_labels=2)
 
 #tokenizer = AutoTokenizer.from_pretrained('google/mt5-small')
-model = MT5ForConditionalGeneration.from_pretrained('google/mt5-large')
-tokenizer = MT5TokenizerFast.from_pretrained('google/mt5-large')
+#model = MT5ForConditionalGeneration.from_pretrained('google/mt5-large')
 # model = MT5Model.from_pretrained('google/mt5-small') #, num_labels=2)
+model = T5ForConditionalGeneration.from_pretrained('google/byt5-large')
+#tokenizer = MT5TokenizerFast.from_pretrained('google/mt5-large')
+tokenizer = AutoTokenizer.from_pretrained('google/byt5-large')
 
 X_train = train_df.input_text.tolist()
 y_train = train_df.target_text.tolist()
@@ -93,7 +98,7 @@ val_dataset = Dataset(X_val_tokenized, y_val_tokenized)
 # Define Trainer
 
 args = TrainingArguments(
-    output_dir="output",
+    output_dir="output_byt5",
     overwrite_output_dir="true",
     #evaluation_strategy="epoch",
     evaluation_strategy="steps",
@@ -112,6 +117,23 @@ args = TrainingArguments(
     load_best_model_at_end=True,
     report_to="wandb",
 )
+
+# args_dict = {
+#   "output_dir": './models/tpu',
+#   "per_gpu_eval_batch_size": 8,
+#   "num_cores": 8,
+#   'training_script': 'train_t5_squad.py',
+#   "model_name_or_path": 't5-base',
+#   "max_len": 512 ,
+#   "target_max_len": 16,
+#   "overwrite_output_dir": True,
+#   "per_gpu_train_batch_size": 8,
+#   "gradient_accumulation_steps": 4,
+#   "learning_rate": 1e-4,
+#   "tpu_num_cores": 8,
+#   "num_train_epochs": 4,
+#   "do_train": True
+# }
 
 trainer = Trainer(
     model=model,
@@ -153,7 +175,7 @@ y_test = test_df.target_text.tolist()
 # #model = BertForSequenceClassification.from_pretrained(model_path, num_labels=2)
 #model_path = "outputs/best_model/"
 
-model_path = "output"
+model_path = "output_byt5"
 model = MT5ForConditionalGeneration.from_pretrained(model_path)
 model = model.to("cuda:0")
 
