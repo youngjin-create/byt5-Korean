@@ -20,6 +20,10 @@ from transformers import MT5ForConditionalGeneration, MT5TokenizerFast
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
+import wandb
+wandb.init(project="hug_ape210k", name="mt5")
+           #tags=["baseline", "high-lr"],
+           #group="bert"
 
 train_df = pd.read_csv("train.tsv", sep="\t").astype(str)
 eval_df = pd.read_csv("eval.tsv", sep="\t").astype(str)
@@ -88,25 +92,22 @@ val_dataset = Dataset(X_val_tokenized, y_val_tokenized)
 
 # Define Trainer
 
-import wandb
-ndb.init(project="ape210k", 
-           name="mt5")
-           #tags=["baseline", "high-lr"],
-           #group="bert"
-
 args = TrainingArguments(
     output_dir="output",
     overwrite_output_dir="true",
-    evaluation_strategy="epoch",
-    #eval_steps=20000,
-    save_strategy="epoch",
+    #evaluation_strategy="epoch",
+    evaluation_strategy="steps",
+    eval_steps=20000,
+    #save_strategy="epoch",
+    save_startegy="steps",
+    save_steps=20000,
+    save_total_limit=3,
     dataloader_num_workers=4,
-    #save_steps=100,
     learning_rate=0.0001,
-    per_device_train_batch_size=4,
+    per_device_train_batch_size=2,
+    per_device_eval_batch_size=2,
     gradient_accumulation_steps=40,
-    per_device_eval_batch_size=4,
-    num_train_epochs=2,
+    num_train_epochs=10,
     seed=0,
     load_best_model_at_end=True,
     report_to="wandb",
@@ -147,7 +148,7 @@ trainer.train()
 # # Load test data
 #test_data = pd.read_csv(prefix + "test.csv", header=None)
 #test_data = test_data.rename(columns={0:'sentiment', 1:'review'})
-test_df = pd.read_csv("train.tsv", sep="\t").astype(str)
+test_df = pd.read_csv("valid.tsv", sep="\t").astype(str)
 # X_test = list(test_data["review"])[:100]
 # y_test = list(test_data["sentiment"])[:100]
 # X_test_tokenized = tokenizer(X_test, padding=True, truncation=True, max_length=512)
@@ -157,48 +158,92 @@ test_df = pd.read_csv("train.tsv", sep="\t").astype(str)
 X_test = test_df.input_text.tolist()
 y_test = test_df.target_text.tolist()
 
-X_test_tokenized = tokenizer(X_test[:100], padding=True, truncation=True, max_length=512)
-y_test_tokenized = tokenizer(y_test[:100], padding=True, truncation=True, max_length=128).input_ids
-
+# X_test_tokenized = tokenizer(X_test, padding=True, truncation=True, max_length=512)
+# y_test_tokenized = tokenizer(y_test, padding=True, truncation=True, max_length=128).input_ids
 
 # # # Create torch dataset
-test_dataset = Dataset(X_test_tokenized, y_test_tokenized)
+#test_dataset = Dataset(X_test_tokenized, y_test_tokenized)
 
 # #
 # # Load trained model
-model_path = "output/checkpoint-2438"
+#model_path = "output/checkpoint-2438"
 # #model = BertForSequenceClassification.from_pretrained(model_path, num_labels=2)
+#model_path = "outputs/best_model/"
+
+model_path = "output"
 model = MT5ForConditionalGeneration.from_pretrained(model_path)
-#
-#
-# # Define test trainer
-args = TrainingArguments(
-    output_dir="output",
-    #overwrite_output_dir="true",
-    #evaluation_strategy="steps",
-    #eval_steps=100,
-    #save_strategy="epoch",
-    #save_steps=100,
-    #per_device_train_batch_size=32,
-    #gradient_accumulation_steps=2,
-    per_device_eval_batch_size=4,
-    num_train_epochs=1,
-    seed=0,
-    #load_best_model_at_end=True,
-)
-test_trainer = Trainer(model, args=args)
-#
-# Make prediction
-raw_pred, _, _ = test_trainer.predict(test_dataset)
-#
-# Preprocess raw predictions
-#y_pred = np.argmax(raw_pred, axis=3)
-y_pred= torch.from_numpy(raw_pred[0]).max(dim=2)[1]
+model = model.to("cuda:0")
 
-# X_test_tokenized_ids = tokenizer(X_test, padding=True, truncation=True, max_length=512, return_tensors='pt').input_ids
-# model = model.to("cuda:0")
-# y_pred = model.generate(X_test_tokenized_ids.to("cuda:0"))
+# # # Define test trainer
+# args = TrainingArguments(
+#     output_dir="output",
+#     #overwrite_output_dir="true",
+#     #evaluation_strategy="steps",
+#     #eval_steps=100,
+#     #save_strategy="epoch",
+#     #save_steps=100,
+#     #per_device_train_batch_size=32,
+#     #gradient_accumulation_steps=2,
+#     per_device_eval_batch_size=4,
+#     #per_device_test_batch_size=4,
+#     num_train_epochs=1,
+#     seed=0,
+#     #load_best_model_at_end=True,
+# )
+# test_trainer = Trainer(model, args=args)
+# # Make prediction
+# raw_pred, _, _ = test_trainer.predict(test_dataset)
+# y_pred.attach(torch.from_numpy(raw_pred[0]).max(dim=2)[1])
 
-tokenizer.batch_decode(y_pred)
+#X_test_solve = ["Solve: " + x for x in X_test]
+#X_test_tokenized_ids = tokenizer(X_test_solve, padding=True, truncation=True, max_length=512, return_tensors='pt').input_ids
+X_test_tokenized_ids = tokenizer(X_test, padding=True, truncation=True, max_length=512, return_tensors='pt').input_ids
+
+decoded_list = []
+for i in tqdm(range(0,len(X_test_tokenized_ids),16)):
+    y_pred = model.generate(X_test_tokenized_ids[i:i+16].to("cuda:0"))
+    decoded_list.append(tokenizer.batch_decode(y_pred))
+
+
+from tqdm import tqdm
+import re
+import itertools
+
+def normalizetext(text):
+    # Percentage to Fraction
+    text = text.replace('x=', '')
+    text = re.sub('([0-9]+)[:]([0-9]+)', '(\g<1>/\g<2>)', text)
+    text = re.sub('([0-9]+)[(]([0-9]+)[/]([0-9]+)[)]', '(\g<1>*\g<3>+\g<2>)/(\g<3>)', text)
+    objj = re.findall('(?!(?:\.)?%)\d+(?:\.\d+)?%', text)
+    for s in objj:
+        text = text.replace(s, '('+s[:-1]+'/100)')
+    text = re.sub('([0-9]+)[(]([0-9]+)[/]([0-9]+)[)]', '(\g<1>*\g<3>+\g<2>)/(\g<3>)', text)
+    return text
+
+joined = list(itertools.chain.from_iterable(decoded_list))
+joined_refined = [re.sub('<pad>', '', x)[1:-4] for x in joined]
+test_df['predicted'] = joined_refined
+
+
+error_list = []
+right_list = []
+wrong_list = []
+for idx, expr in enumerate(test_df["predicted"].tolist()):
+    try:
+        result1 = sympify(normalizetext(expr))
+        result2 = sympify(normalizetext(test_df["target_text"].loc[idx]))
+        if (result1 - result2)** 2 < 1e-5:
+            right_list.append((idx, result1, result2))
+        else:
+            wrong_list.append((idx, result1, result2))
+    except Exception as e:
+        error_list.append(idx)
+        print(e)
+
+len(right_list) / len(test_df) * 100
+len(wrong_list) / len(test_df) * 100
+len(error_list) / len(test_df) * 100
+
+
 
 
