@@ -1,11 +1,13 @@
 import torch
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer
-tokenizer = AutoTokenizer.from_pretrained('google/byt5-large')
+from tokenizer import ByT5KoreanTokenizer
+tokenizer = ByT5KoreanTokenizer()
+# from transformers import AutoTokenizer
+# tokenizer = AutoTokenizer.from_pretrained('google/byt5-small')
 
 from Korpora import Korpora
 corpus = Korpora.load("kowikitext")
-ids = tokenizer(corpus.train.texts, padding=True, truncation=True, max_length=16).input_ids
+ids = tokenizer(corpus.train.texts, padding=True, truncation=True, max_length=512).input_ids
 ids_train = ids[:int(len(ids)*0.8)]
 ids_eval = ids[int(len(ids)*0.8):]
 

@@ -1,8 +1,9 @@
 
 from transformers import T5Config, T5Model, T5ForConditionalGeneration, AutoTokenizer, DataCollatorForSeq2Seq, TrainingArguments, Trainer
-import mydataset
+from tokenizer import ByT5KoreanTokenizer
+import dataset
 
-model_path = './byT5-Korean-large'
+model_path = './byT5-Korean-small'
 
 model_config_small = {
     "_name_or_path": "google/byt5-small",
@@ -63,14 +64,6 @@ model_config_large = {
     "vocab_size": 384
 }
 
-# tokenizer = T5Tokenizer.from_pretrained('t5-small')
-# >>> model = T5ForConditionalGeneration.from_pretrained('t5-small')
-# >>> # training
-# >>> input_ids = tokenizer('The <extra_id_0> walks in <extra_id_1> park', return_tensors='pt').input_ids
-# >>> labels = tokenizer('<extra_id_0> cute dog <extra_id_1> the <extra_id_2>', return_tensors='pt').input_ids
-# >>> outputs = model(input_ids=input_ids, labels=labels)
-# >>> loss = outputs.loss
-# >>> logits = outputs.logits
 def main():
     model_config = T5Config(**model_config_small)
     # model = T5Model(config=model_config) # 그냥 T5 모델로 하면 안되고 T5ForConditionalGeneration를 사용해야 함
@@ -80,9 +73,9 @@ def main():
         output_dir=model_path,          # output directory to where save model checkpoint
         evaluation_strategy="steps",    # evaluate each `logging_steps` steps
         overwrite_output_dir=True,      
-        num_train_epochs=100,            # number of training epochs, feel free to tweak
-        per_device_train_batch_size=10, # the training batch size, put it as high as your GPU memory fits
-        gradient_accumulation_steps=8,  # accumulating the gradients before updating the weights
+        num_train_epochs=1000,            # number of training epochs, feel free to tweak
+        per_device_train_batch_size=32, # the training batch size, put it as high as your GPU memory fits
+        gradient_accumulation_steps=2,  # accumulating the gradients before updating the weights
         per_device_eval_batch_size=64,  # evaluation batch size
         logging_steps=500,              # evaluate, log and save model checkpoints every 1000 step
         save_steps=500,
@@ -93,14 +86,28 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        # data_collator=data_collator,
-        # data_collator=DataCollatorForSeq2Seq(tokenizer=AutoTokenizer.from_pretrained('google/byt5-large'), model='google/byt5-large'),
-        train_dataset=mydataset.KoreanDataset(evaluate=False),
-        eval_dataset=mydataset.KoreanDataset(evaluate=True),
+        # data_collator=DataCollatorForSeq2Seq(tokenizer=AutoTokenizer.from_pretrained('google/byt5-small'), model='google/byt5-small'),
+        data_collator=DataCollatorForSeq2Seq(tokenizer=ByT5KoreanTokenizer()),
+        train_dataset=dataset.KoreanDataset(evaluate=False),
+        eval_dataset=dataset.KoreanDataset(evaluate=True),
     )
 
     trainer.train()
 
+def test():
+    tokenizer = ByT5KoreanTokenizer()
+    # model = T5ForConditionalGeneration.from_pretrained('t5-small')
+    model = T5ForConditionalGeneration.from_pretrained(model_path + '/checkpoint-1000')
+
+    input_ids = tokenizer('The <extra_id_0> walks in <extra_id_1> park', return_tensors='pt').input_ids
+    labels = tokenizer('<extra_id_0> cute dog <extra_id_1> the <extra_id_2>', return_tensors='pt').input_ids
+    outputs = model(input_ids=input_ids, labels=labels)
+    loss = outputs.loss
+    logits = outputs.logits
+
+    output_ids = model.generate(input_ids)
+
 if __name__ == "__main__":
     main()
+    # test()
     print("Done")
