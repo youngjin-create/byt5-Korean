@@ -24,6 +24,20 @@ def normalizetext(text):
     text = re.sub('([0-9]+)[(]([0-9]+)[/]([0-9]+)[)]', '(\g<1>*\g<3>+\g<2>)/(\g<3>)', text)
     return text
 
+# model_args = {
+#     "overwrite_output_dir": True,
+#     #"max_seq_length": 196,
+#     "max_seq_length": 512,
+#     "eval_batch_size": 16,
+#     # "num_train_epochs": 1,
+#     "use_multiprocessing": False,
+#     "num_beams": None,
+#     "do_sample": True,
+#     #"max_length": 50,
+#     "top_k": 50,
+#     "top_p": 0.95,
+#     "num_return_sequences": 3,
+# }
 
 model_args = {
     "overwrite_output_dir": True,
@@ -35,13 +49,15 @@ model_args = {
     "num_beams": None,
     "do_sample": True,
     #"max_length": 50,
-    "top_k": 50,
-    "top_p": 0.95,
-    "num_return_sequences": 3,
+    "top_k": 1,
+    #"top_p": 0.95,
+    "num_return_sequences": 1,
 }
 
 # Load the trained model
-model = T5Model("mt5", "outputs", args=model_args)
+#model = T5Model("mt5", "outputs", args=model_args)
+
+model = T5Model("mt5", "outputs/best_model/", args=model_args)
 
 # Load the evaluation data
 #df = pd.read_csv("data/eval.tsv", sep="\t").astype(str)
