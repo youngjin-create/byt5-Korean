@@ -1,0 +1,5 @@
+preprocessors.random_spans_helper.inputs_length = 1024
+preprocessors.random_spans_helper.noise_density = 0.15
+preprocessors.random_spans_helper.mean_noise_span_length = 20
+preprocessors.random_spans_helper.extra_tokens_per_span_inputs = 1
+preprocessors.random_spans_helper.extra_tokens_per_span_targets = 1

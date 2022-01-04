@@ -412,11 +412,11 @@ def random_split_text(dataset,
     chunk being potentially smaller.  A random chunk is returned.
 
     Args:
-      x: a 1d tf.Tensor
-      chunk_size: an integer
-      seed: an int, a random seed.
+      x: a 1d tf.Tensor.
+      chunk_size: an integer.
+      seed: int32 [2]-Tensor, the random seed.
     Returns:
-      a 1d tf.Tensor with length <= chunk_size
+      a 1d tf.Tensor with length <= chunk_size.
     """
     size = tf.size(x)
     num_chunks = tf.maximum(1, (size - 1) // chunk_size + 1)
@@ -434,7 +434,7 @@ def random_split_text(dataset,
 
     Args:
       x: a feature dictionary
-      seeds: an int32 Tensor, shaped (2, 2).
+      seeds: an int32 Tensor, shaped (2, 2), the random seeds.
     Returns:
       a feature dictionary
     """
@@ -532,7 +532,7 @@ def fill_in_the_blank(dataset,
 
     Args:
       x: an example dict with text pre-split in `words` feature.
-      seeds: an int32 Tensor, shaped (3, 2).
+      seeds: an int32 Tensor, shaped (3, 2), the random seeds.
     Returns:
       an example dict with two inputs and two targets, one for each resulting
       preprocessed example.
@@ -1534,7 +1534,7 @@ def rank_classification(ds: tf.data.Dataset,
   inputs_fn=lambda ex: ex['prefix'],
   targets_fn=lambda ex: ex['suffix'],
   is_correct_fn=lambda ex: tf.one_hot(ex['label'], num_classes)
-  weight_fn=lambda ex: tf.fill([num_classes], ex['weight'])
+  weight_fn=lambda ex: ex['weight']
 
   Given the following example:
 
@@ -1861,13 +1861,18 @@ def preprocess_tsv(line,
 
 
 # TODO(adarob): Add a test.
-def span_corruption(dataset, sequence_length, output_features,
-                    mean_noise_span_length=3.0, noise_density=0.15):
+def span_corruption(dataset,
+                    sequence_length,
+                    output_features,
+                    mean_noise_span_length=3.0,
+                    noise_density=0.15,
+                    input_feature_key='inputs',
+                    merge_examples_to_reduce_padding=True):
   """Final pretraining objective used in Raffel et al., 2019."""
   input_length, targets_length = random_spans_helper(
       extra_tokens_per_span_inputs=1,
       extra_tokens_per_span_targets=1,
-      inputs_length=sequence_length['inputs'],
+      inputs_length=sequence_length[input_feature_key],
       mean_noise_span_length=mean_noise_span_length,
       noise_density=noise_density)
 
@@ -1878,9 +1883,13 @@ def span_corruption(dataset, sequence_length, output_features,
         f"({sequence_length['targets']})")
 
   ds = dataset
-  ds = select_random_chunk(ds, output_features=output_features,
-                           feature_key='targets', max_length=65536)
-  ds = reduce_concat_tokens(ds, feature_key='targets', batch_size=128)
+  ds = select_random_chunk(
+      ds,
+      output_features=output_features,
+      feature_key='targets',
+      max_length=65536)
+  if merge_examples_to_reduce_padding:
+    ds = reduce_concat_tokens(ds, feature_key='targets', batch_size=128)
   ds = split_tokens(
       ds,
       feature_key='targets',
@@ -1894,9 +1903,8 @@ def span_corruption(dataset, sequence_length, output_features,
       noise_density=noise_density,
       noise_mask_fn=functools.partial(
           random_spans_noise_mask,
-          mean_noise_span_length=mean_noise_span_length
-      )
-  )
+          mean_noise_span_length=mean_noise_span_length),
+      input_feature_key=input_feature_key)
   return ds
 
 
@@ -1938,6 +1946,18 @@ def prefix_lm(dataset, sequence_length, output_features):
   return ds
 
 
+def full_lm(dataset, sequence_length, output_features):
+  """Full language modeling objective with EOS only at document boundaries."""
+  ds = dataset
+  ds = select_random_chunk(ds, output_features=output_features,
+                           feature_key='targets', max_length=65536)
+  ds = seqio.preprocessors.append_eos(ds, output_features)
+  ds = reduce_concat_tokens(ds, feature_key='targets', batch_size=128)
+  # Don't use `split_tokens_to_targets_length` since we've alrady added EOS.
+  ds = split_tokens(ds, max_tokens_per_segment=sequence_length['targets'])
+  return ds
+
+
 @gin.configurable
 def select_random_chunk(dataset: tf.data.Dataset,
                         output_features: Mapping[str, seqio.Feature],
@@ -1948,6 +1968,7 @@ def select_random_chunk(dataset: tf.data.Dataset,
                             Sequence[str]] = None,
                         sequence_length: Optional[Mapping[str, int]] = None,
                         uniform_random_start: bool = False,
+                        min_length: Optional[int] = None,
                         **unused_kwargs) -> tf.data.Dataset:
   """Token-preprocessor to extract one span of at most `max_length` tokens.
 
@@ -1972,6 +1993,9 @@ def select_random_chunk(dataset: tf.data.Dataset,
       [-max_length + 1, n_tokens). If False, will select one of a set of chunks
       offset by max_length. Both of these starting points try to ensure each
       token has an equal probability of being included.
+    min_length: If specified, lengths of chunks will be selected uniformly at
+      random from [min_length, max_length]. Note that chunks can end up shorter
+      than min_length if at the beginning or end of the sequence.
 
   Returns:
     a dataset
@@ -1991,48 +2015,58 @@ def select_random_chunk(dataset: tf.data.Dataset,
   if max_length is None:
     raise ValueError('Must specify max_length or sequence_length.')
 
-  @seqio.map_over_dataset(num_seeds=1)
-  def _my_fn(x, seed):
+  @seqio.map_over_dataset(num_seeds=2)
+  def _my_fn(x, seeds):
     """Select a random chunk of tokens.
 
     Args:
       x: a 1d Tensor
-      seed: an int32 Tensor, shaped (2).
+      seeds: an int32 Tensor, shaped (2, 2), the random seeds.
     Returns:
       a 1d Tensor
     """
     tokens = x[feature_key]
-    n_tokens = tf.size(tokens)
+    n_tokens = tf.shape(tokens)[0]
+    if min_length is not None:
+      length = tf.random.stateless_uniform(
+          [],
+          minval=min_length,
+          maxval=max_length,
+          dtype=tf.int32,
+          seed=seeds[0])
+    else:
+      length = max_length
     if uniform_random_start:
       start = tf.random.stateless_uniform(
           [],
-          minval=-max_length + 1,  # pylint:disable=invalid-unary-operand-type
+          minval=-length + 1,  # pylint:disable=invalid-unary-operand-type
           maxval=n_tokens,
           dtype=tf.int32,
-          seed=seed)
-      end = tf.minimum(start + max_length, n_tokens)
+          seed=seeds[1])
+      end = tf.minimum(start + length, n_tokens)
       start = tf.maximum(start, 0)
     else:
       num_segments = tf.cast(
           tf.math.ceil(
-              tf.cast(n_tokens, tf.float32) / tf.cast(max_length, tf.float32)
+              tf.cast(n_tokens, tf.float32) / tf.cast(length, tf.float32)
           ),
           tf.int32)
-      start = max_length * tf.random.stateless_uniform(
+      start = length * tf.random.stateless_uniform(
           [],
           maxval=num_segments,
           dtype=tf.int32,
-          seed=seed)
-      end = tf.minimum(start + max_length, n_tokens)
+          seed=seeds[1])
+      end = tf.minimum(start + length, n_tokens)
     chunk = {feature_key: tokens[start:end]}
     if additional_feature_keys is not None:
       for k in additional_feature_keys:
         with tf.control_dependencies([
             tf.assert_equal(
-                tf.size(tokens),
-                tf.size(x[k]),
+                tf.shape(tokens)[0],
+                tf.shape(x[k])[0],
                 message=(f'Additional feature {k} is not the same size as '
-                         f'{feature_key} in select_random_chunk().')
+                         f'{feature_key} along axis 0 in select_random_chunk().'
+                         )
             )
         ]):
           chunk[k] = x[k][start:end]
@@ -2308,7 +2342,7 @@ def split_tokens(dataset: tf.data.Dataset,
   def _split_tokens(x, seed):
     """Split one token sequence into multiple sequences."""
     tokens = x[feature_key]
-    n_tokens = tf.size(tokens)
+    n_tokens = tf.shape(tokens)[0]
     if min_tokens_per_segment is None:
       length = max_tokens_per_segment
     else:
@@ -2331,28 +2365,32 @@ def split_tokens(dataset: tf.data.Dataset,
             tf.cast(n_tokens, tf.float32) / tf.cast(length, tf.float32))
         ,
         tf.int32)
-    padding = num_segments * length - tf.size(tokens)
-    padded = tf.pad(tokens, [[0, padding]])
-    orig_lengths = {
-        feature_key: tf.concat(
-            [tf.repeat(length, num_segments - 1), [length - padding]], axis=0)
-    }
-    outputs = {feature_key: tf.reshape(padded, [-1, length])}
+    padding = num_segments * length - tf.shape(tokens)[0]
+    feature_keys_to_split = [feature_key]
+    orig_lengths = {}
+    outputs = {}
     if additional_feature_keys is not None:
-      for k in additional_feature_keys:
-        with tf.control_dependencies([
-            tf.assert_equal(
-                tf.size(tokens),
-                tf.size(x[k]),
-                message=(f'Additional feature {k} is not the same size as '
-                         f'{feature_key} in split_tokens().')
-            )
-        ]):
-          padded = tf.pad(x[k], [[0, padding]])
-          outputs[k] = tf.reshape(padded, [-1, length])
-          orig_lengths[k] = tf.concat(
-              [tf.repeat(length, num_segments - 1), [length - padding]],
-              axis=0)
+      feature_keys_to_split.extend(additional_feature_keys)
+    for k in feature_keys_to_split:
+      with tf.control_dependencies([
+          tf.assert_equal(
+              tf.shape(tokens)[0],
+              tf.shape(x[k])[0],
+              message=(f'Additional feature {k} is not the same size as '
+                       f'{feature_key} along axis 0 in split_tokens().')
+          )
+      ]):
+        shape = tf.shape(x[k])[1:]
+        shape_list = x[k].shape[1:]
+        padded = tf.pad(
+            x[k],
+            tf.concat([[[0, padding]],
+                       tf.zeros([len(shape_list), 2], dtype=tf.int32)],
+                      axis=0))
+        orig_lengths[k] = tf.concat(
+            [tf.repeat(length, num_segments - 1), [length - padding]], axis=0)
+        outputs[k] = tf.reshape(
+            padded, tf.concat([[-1, length], shape], axis=0))
     if passthrough_feature_keys:
       for k in passthrough_feature_keys:
         outputs[k] = tf.tile(
@@ -2508,7 +2546,7 @@ def random_spans_helper(inputs_length=gin.REQUIRED,
         num_noise_tokens +
         num_noise_spans * extra_tokens_per_span_targets + 1)
 
-  tokens_length = inputs_length
+  tokens_length = inputs_length - 1
   while (_tokens_length_to_inputs_length_targets_length(tokens_length + 1)[0]
          <= inputs_length):
     tokens_length += 1
@@ -2551,6 +2589,7 @@ def denoise(dataset,
             inputs_fn=gin.REQUIRED,
             targets_fn=None,
             passthrough_feature_keys: Optional[Sequence[str]] = None,
+            input_feature_key='inputs',
             **unused_kwargs):
   """Gin-configurable token preprocessor for self-supervised denoising tasks.
 
@@ -2591,34 +2630,42 @@ def denoise(dataset,
     inputs_fn: a function from (tokens, noise_mask, vocabulary) -> tokens
     targets_fn: a function from (tokens, noise_mask, vocabulary) -> tokens
     passthrough_feature_keys: names of additional features to include in output
+    input_feature_key: name of feature to use as inputs
 
   Returns:
     A preprocessed tf.data.Dataset.
   """
-  if passthrough_feature_keys and ('inputs' in passthrough_feature_keys or
-                                   'targets' in passthrough_feature_keys):
-    raise ValueError("passthrough keys cannot contain 'inputs' or 'targets'")
+  if passthrough_feature_keys and (input_feature_key in passthrough_feature_keys
+                                   or 'targets' in passthrough_feature_keys):
+    raise ValueError(
+        f"passthrough keys cannot contain '{input_feature_key}' or 'targets'")
 
   @seqio.map_over_dataset(num_seeds=6)
   def my_fn(features, seeds):
     """Map function."""
     tokens = features['targets']
     vocabulary = output_features['targets'].vocabulary
-    if ('inputs' in output_features and
-        vocabulary != output_features['inputs'].vocabulary):
+    if (input_feature_key in output_features and
+        vocabulary != output_features[input_feature_key].vocabulary):
       raise ValueError(
           'denoise creates inputs based on tokenized targets but was applied '
-          'to a task that uses different vocabularies for inputs and targets.'
-      )
+          'to a task that uses different vocabularies for inputs and targets.')
     noise_mask = noise_mask_fn(tf.size(tokens), noise_density, seeds=seeds[:2])
     inputs = inputs_fn(tokens, noise_mask, vocabulary, seeds=seeds[2:4])
     if targets_fn:
       targets = targets_fn(tokens, noise_mask, vocabulary, seeds=seeds[4:6])
     else:
       targets = tokens
-    return {'inputs': inputs, 'targets': targets,
-            **{k: features[k] for k in features
-               if passthrough_feature_keys and k in passthrough_feature_keys}}
+    return {
+        input_feature_key: inputs,
+        'targets': targets,
+        **{
+            k: features[k]
+            for k in features
+            if passthrough_feature_keys and k in passthrough_feature_keys
+        }
+    }
+
   return my_fn(dataset)
 
 
@@ -2627,12 +2674,12 @@ def iid_noise_mask(length, noise_density, seeds):
   """Independent and identically distributed token noise.
 
   Args:
-    length: an int32 scalar
-    noise_density: a float - approximate density of output mask
-    seeds: an int32 Tensor, shaped (1, 2)
+    length: an int32 scalar.
+    noise_density: a float - approximate density of output mask.
+    seeds: an int32 Tensor, shaped (1, 2), the random seed.
 
   Returns:
-    a boolean tensor with shape [length]
+    a boolean tensor with shape [length].
   """
   return tf.random.stateless_uniform([length], seed=seeds[0]) < noise_density
 
@@ -2653,14 +2700,14 @@ def regular_noise_mask(length,
   [T F F F F F F T T F F F F F F T T F F F F F F T T F F]
 
   Args:
-    length: an int32 scalar
-    noise_density: a float - approximate density of output mask
-    seeds: an int32 Tensor, shaped (2, 2)
-    min_span_length: an integer
-    max_span_length: an integer
+    length: an int32 scalar.
+    noise_density: a float - approximate density of output mask.
+    seeds: an int32 Tensor, shaped (2, 2), the random seeds.
+    min_span_length: an integer.
+    max_span_length: an integer.
 
   Returns:
-    a boolean tensor with shape [length]
+    a boolean tensor with shape [length].
   """
   span_length = tf.random.stateless_uniform(
       [],
@@ -2760,16 +2807,16 @@ def random_prefix_noise_mask(length, noise_density, seeds):
   """First part of the sequence is noise (for prefix_lm).
 
   The length of the prefix is chosen uniformly between [1, length)
-  noise_density must be 0.5
-  TODO(noam): figure out some distribution to use if noise_density != 0.5
+  noise_density must be 0.5.
+  TODO(noam): figure out some distribution to use if noise_density != 0.5.
 
   Args:
-    length: an int32 scalar
-    noise_density: a float - must equal 0.5
-    seeds: an int32 Tensor, shaped (1, 2)
+    length: an int32 scalar.
+    noise_density: a float - must equal 0.5.
+    seeds: an int32 Tensor, shaped (1, 2), the random seed.
 
   Returns:
-    a boolean tensor with shape [length]
+    a boolean tensor with shape [length].
   """
   if noise_density != 0.5:
     raise NotImplementedError(
@@ -3038,3 +3085,126 @@ def noise_token_to_random_token_or_sentinel(
           tokens, noise_mask, vocabulary, seeds=seeds[1:]),
       noise_token_to_sentinel(
           tokens, noise_mask, vocabulary, seeds=()))
+
+
+# =============== EXPERIMENTAL preprocessors (not used for the T5 paper) =======
+
+
+def trim_and_pad_dataset(dataset, sequence_length):
+  """A wrapper to use `seqio.utils.trim_and_pad_dataset` as a preprocessor."""
+  return seqio.utils.trim_and_pad_dataset(
+      dataset, feature_lengths=sequence_length)
+
+
+def targets_for_prefix_lm_objective(dataset, sequence_length, output_features):
+  """Prepares targets to be used for prefix LM objective."""
+  dataset = select_random_chunk(
+      dataset, output_features, max_length=65536, feature_key='targets')
+  dataset = seqio.preprocessors.append_eos(dataset, output_features)
+  dataset = reduce_concat_tokens(dataset, batch_size=128)
+  dataset = split_tokens(
+      dataset, max_tokens_per_segment=sequence_length['targets'])
+  dataset = trim_and_pad_dataset(dataset, sequence_length)
+  return dataset
+
+
+def pack_prefix_lm_encoder_decoder(ds, sequence_length, pad_id=0):
+  """Pack two examples into one with the prefix LM objective."""
+  packed_length = next(iter(sequence_length.values()))
+  assert packed_length % 2 == 0
+  assert all(l == packed_length for l in sequence_length.values())
+
+  @seqio.utils.map_over_dataset(num_seeds=1)
+  def pack_examples(example_pair, seed):
+    split_point = tf.random.stateless_uniform((),
+                                              minval=1,
+                                              maxval=packed_length,
+                                              seed=seed,
+                                              dtype=tf.int32)
+    inputs = tf.concat([
+        example_pair['targets'][0][:split_point],
+        example_pair['targets'][1][:packed_length - split_point]
+    ],
+                       axis=0)
+    inputs = tf.reshape(inputs, (packed_length,))
+    targets = tf.concat([
+        example_pair['targets'][0][split_point:],
+        example_pair['targets'][1][packed_length - split_point:]
+    ],
+                        axis=0)
+    targets = tf.reshape(targets, (packed_length,))
+
+    encoder_segment_ids = tf.cast(
+        tf.range(packed_length) >= split_point, tf.int32) + 1
+    decoder_segment_ids = tf.cast(
+        tf.range(packed_length) >= (packed_length - split_point), tf.int32) + 1
+
+    decoder_input_tokens = seqio.utils.make_autoregressive_inputs(
+        targets, sequence_id=decoder_segment_ids)
+
+    encoder_positions = tf.concat(
+        [tf.range(split_point),
+         tf.range(packed_length - split_point)], axis=0)
+    encoder_positions = tf.reshape(encoder_positions, (packed_length,))
+    decoder_positions = tf.concat(
+        [tf.range(packed_length - split_point),
+         tf.range(split_point)], axis=0)
+    decoder_positions = tf.reshape(decoder_positions, (packed_length,))
+    decoder_loss_weights = tf.cast(
+        tf.not_equal(targets, pad_id), dtype=tf.int32)
+    return {
+        'encoder_input_tokens': inputs,
+        'decoder_target_tokens': targets,
+        'decoder_input_tokens': decoder_input_tokens,
+        'encoder_segment_ids': encoder_segment_ids,
+        'encoder_positions': encoder_positions,
+        'decoder_segment_ids': decoder_segment_ids,
+        'decoder_positions': decoder_positions,
+        'decoder_loss_weights': decoder_loss_weights,
+    }
+
+  # Note that the batch requires the lengths to be the same.
+  return pack_examples(ds.batch(2))
+
+
+def pack_prefix_lm_decoder_only(ds,
+                                sequence_length,
+                                loss_on_targets_only=True,
+                                pad_id=0):
+  """Randomly split the tokens for the prefix LM objective."""
+  packed_length = next(iter(sequence_length.values()))
+  assert packed_length % 2 == 0
+  assert all(l == packed_length for l in sequence_length.values())
+
+  @seqio.utils.map_over_dataset(num_seeds=1)
+  def pack_examples(example, seed):
+    split_point = tf.random.stateless_uniform((),
+                                              minval=1,
+                                              maxval=packed_length,
+                                              seed=seed,
+                                              dtype=tf.int32)
+    decoder_target_tokens = example['targets']
+    decoder_input_tokens = seqio.utils.make_autoregressive_inputs(
+        decoder_target_tokens)
+
+    if loss_on_targets_only:
+      decoder_loss_weights = tf.cast(
+          tf.range(packed_length) >= split_point, tf.int32)
+    else:
+      decoder_loss_weights = tf.ones((packed_length,), dtype=tf.int32)
+
+    padding_mask = tf.cast(
+        tf.not_equal(decoder_target_tokens, pad_id), dtype=tf.int32)
+    decoder_loss_weights *= padding_mask
+
+    decoder_causal_attention = tf.cast(
+        tf.range(packed_length) <= split_point, tf.int32)
+
+    return {
+        'decoder_target_tokens': decoder_target_tokens,
+        'decoder_input_tokens': decoder_input_tokens,
+        'decoder_loss_weights': decoder_loss_weights,
+        'decoder_causal_attention': decoder_causal_attention,
+    }
+
+  return pack_examples(ds)
