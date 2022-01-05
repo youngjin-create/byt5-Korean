@@ -13,5 +13,4 @@
 
 __pycache__/
 wandb/
-byT5-Korean-small/
-byT5-Korean-large/
+byT5-Korean-*/
