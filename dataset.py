@@ -1,11 +1,16 @@
-import torch
-from torch.utils.data import Dataset
+# we are using tensorflow just for preprocessing (using codes from google/t5)
+# so force to use cpus
+import os
+cuda_devices = os.environ["CUDA_VISIBLE_DEVICES"]
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tensorflow.compat.v2 as tf
-
-# prevent tensorflow from pre-allocating memory
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
-    tf.config.experimental.set_memory_growth(gpu, True)
+    tf.config.experimental.set_memory_growth(gpu, True) # prevent tensorflow from pre-allocating memory
+os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
+
+import torch
+from torch.utils.data import Dataset
 
 from tokenizer import ByT5KoreanTokenizer
 tokenizer = ByT5KoreanTokenizer()
@@ -27,10 +32,10 @@ mean_noise_span_length = 20
 extra_tokens_per_span_inputs = 1
 extra_tokens_per_span_targets = 1
 
-def random_span_masking(ids, noise_density, seeds, sentinel_id, mean_noise_span_length):
+def random_span_masking(ids, noise_density, seeds, sentinel_id, extra_ids_increment, mean_noise_span_length):
     noise_mask = random_spans_noise_mask(tf.size(ids), noise_density, seeds, mean_noise_span_length)
-    input_ids = noise_span_to_unique_sentinel(ids, noise_mask, sentinel_id)
-    labels = nonnoise_span_to_unique_sentinel(ids, noise_mask, sentinel_id)
+    input_ids = noise_span_to_unique_sentinel(ids, noise_mask, sentinel_id, extra_ids_increment)
+    labels = nonnoise_span_to_unique_sentinel(ids, noise_mask, sentinel_id, extra_ids_increment)
     return input_ids, labels
 
 def add_eos(ids, eos_id=1):
@@ -50,15 +55,33 @@ c4_ko_eval = []
 #         c4_ko.append(json.loads(line))
 #         # c4_ko.append(tokenizer(json.loads(line)['text'], add_special_tokens=False).input_ids)
 
-n_texts = 0
-for filename in tqdm(glob.glob("/data/shared/c4/c4/multilingual/*ko*.gz")[:500]):
-    with gzip.open(filename) as f:
-        for line in f:
-            n_texts += 1
-            if n_texts % 100 != 0 or len(c4_ko_eval) >= 1000:
-                c4_ko_train.append(json.loads(line))
-            else:
-                c4_ko_eval.append(json.loads(line))
+def load_eval_all():
+    n_texts = 0
+    # for filename in tqdm(sorted(glob.glob("/data/shared/c4/c4/multilingual/c4-ko.tfrecord-*.gz"))):
+    for filename in sorted(glob.glob("/data/shared/c4/c4/multilingual/c4-ko.tfrecord-*.gz")):
+        with gzip.open(filename) as f:
+            for line in f:
+                n_texts += 1
+                if n_texts % 100 != 0 or len(c4_ko_eval) >= 1000:
+                    # c4_ko_train.append(json.loads(line))
+                    continue
+                else:
+                    c4_ko_eval.append(json.loads(line))
+                    if len(c4_ko_eval) >= 1000:
+                        return
+load_eval_all()
+
+def get_train_record(files = '/data/shared/c4/c4/multilingual/c4-ko.tfrecord-*.gz'):
+    n_texts = 0
+    for filename in tqdm(sorted(glob.glob(files))):
+        with gzip.open(filename) as f:
+            for line in f:
+                n_texts += 1
+                if n_texts % 100 != 0 or len(c4_ko_eval) >= 1000:
+                    yield json.loads(line)
+                else:
+                    continue
+
 # from Korpora import Korpora
 # corpus = Korpora.load("kowikitext")
 # ids = tokenizer(corpus.train.texts, padding=True, truncation=True, max_length=512).input_ids
@@ -67,15 +90,26 @@ for filename in tqdm(glob.glob("/data/shared/c4/c4/multilingual/*ko*.gz")[:500])
 
 class KoreanDataset(Dataset):
     def __init__(self, evaluate: bool = False):
-        self.examples = c4_ko_train if not evaluate else c4_ko_eval
+        self.evaluate = evaluate
+        self.records = get_train_record() if not evaluate else (record for record in c4_ko_eval)
         return
 
     def __len__(self):
-        return len(self.examples)
+        if self.evaluate:
+            return len(c4_ko_eval)
+        else:
+            return 7617632
 
     def __getitem__(self, i):
-        ids = tokenizer(self.examples[i]['text'], padding=True, truncation=True, max_length=tokens_length, add_special_tokens=False).input_ids
-        input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259, mean_noise_span_length)
+        # print('record:', i)
+        if self.evaluate:
+            record = c4_ko_eval[i]['text']
+        else:
+            record = next(self.records)['text']
+
+        ids = tokenizer(record, padding=True, truncation=True, max_length=tokens_length, add_special_tokens=False).input_ids
+        input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259, 1, mean_noise_span_length)
+        # input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 258, -1, mean_noise_span_length) # google style
         input_ids = add_eos(input_ids)
         labels = add_eos(labels)
 
