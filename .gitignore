@@ -12,7 +12,9 @@
 *.vsix
 
 __pycache__/
-wandb/
+wandb*/
+
+# model directory
 byt5-Korean*/
 byT5-Korean*/
 google-byt5*/

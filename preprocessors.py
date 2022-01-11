@@ -4,7 +4,7 @@ from t5.preprocessors import random_spans_helper, random_spans_noise_mask
 import gin
 gin.parse_config_file('config.gin')
 
-def noise_span_to_unique_sentinel(tokens, noise_mask, sentinel_id):
+def noise_span_to_unique_sentinel(tokens, noise_mask, sentinel_id, extra_ids_increment=1):
     """Replace each run of consecutive noise tokens with a different sentinel.
 
     The idea here is to be able to align the dropped spans in the inputs
@@ -35,15 +35,15 @@ def noise_span_to_unique_sentinel(tokens, noise_mask, sentinel_id):
         noise_mask, tf.logical_not(prev_token_is_noise))
     subsequent_noise_tokens = tf.logical_and(noise_mask, prev_token_is_noise)
 
-    sentinel = sentinel_id - 1 + tf.cumsum(
-        tf.cast(first_noise_tokens, tokens.dtype))
+    sentinel = sentinel_id + extra_ids_increment * (-1 + tf.cumsum(
+        tf.cast(first_noise_tokens, tokens.dtype)))
 
     tokens = tf.where(first_noise_tokens, sentinel, tokens)
     return tf.boolean_mask(tokens, tf.logical_not(subsequent_noise_tokens))
 
-def nonnoise_span_to_unique_sentinel(tokens, noise_mask, vocabulary):
+def nonnoise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, extra_ids_increment=1):
     return noise_span_to_unique_sentinel(
-        tokens, tf.logical_not(noise_mask), vocabulary)
+        tokens, tf.logical_not(noise_mask), vocabulary, extra_ids_increment)
 
 def random_span_masking(ids,
                         noise_density,
