@@ -112,7 +112,7 @@ def test_base():
 def test():
     tokenizer = ByT5KoreanTokenizer()
     # model = T5ForConditionalGeneration.from_pretrained('t5-small')
-    model = T5ForConditionalGeneration.from_pretrained(model_path + '/checkpoint-4500')
+    model = T5ForConditionalGeneration.from_pretrained(model_path + '/checkpoint-103000')
     ds_train = dataset.KoreanDataset(evaluate=False)
     for i in range(10):
         # input_ids = tokenizer('The <extra_id_0> walks in <extra_id_1> park', return_tensors='pt').input_ids
@@ -123,9 +123,10 @@ def test():
         loss = outputs.loss
         logits = outputs.logits
         output_ids = model.generate(input_ids)[0][1:] # ignore output_ids[0] which is decoder_start_token_id
+        print(tokenizer.decode(input_ids[0]))
         print(tokenizer.decode(output_ids))
 
 if __name__ == "__main__":
-    train()
-    # test()
+    # train()
+    test()
     print("Done")

@@ -13,4 +13,6 @@
 
 __pycache__/
 wandb/
-byT5-Korean-*/
+byt5-Korean*/
+byT5-Korean*/
+google-byt5*/
