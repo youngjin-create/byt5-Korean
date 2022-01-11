@@ -1,0 +1,31 @@
+{
+    "pretrain_from_scratch": true,
+    "pretrain_config_name": "google/byt5-small",
+    "model_name_or_path": "./byT5-Korean-small-128bs-5e-4lr-59512steps-single",
+
+    "run_name": "byT5-Korean-small-128bs-5e-4lr-59512steps-test",
+
+    "do_train": true,
+    "do_eval": true,
+    "do_predict": true,
+    "output_dir": "./byT5-Korean-small-128bs-5e-4lr-59512steps-single",
+    "overwrite_output_dir": true,
+    "learning_rate": 1e-4,
+    "lr_scheduler_type": "constant",
+    "num_train_epochs": 1,
+    "max_steps": 59512,
+    "warmup_steps": 500,
+    "per_device_train_batch_size": 8, 
+    "gradient_accumulation_steps": 16,
+    "per_device_eval_batch_size": 8,
+    "evaluation_strategy": "steps",
+    "logging_steps": 100,
+    "eval_steps": 1000,
+    "save_steps": 1000,
+    "save_total_limit": 3,
+    "predict_with_generate": true,
+    "load_best_model_at_end": true,
+    "ignore_data_skip": true,
+
+    "fp16": true
+}
