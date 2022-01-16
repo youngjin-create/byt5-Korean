@@ -1,3 +1,6 @@
+
+# The following code includes modification from t5, see LICENSE.
+
 # we are using tensorflow just for preprocessing (using codes from google/t5)
 # so force to use cpus
 import os

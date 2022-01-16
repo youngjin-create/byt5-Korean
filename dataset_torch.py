@@ -1,16 +1,5 @@
-# Copyright 2021 The ByT5 Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+
+# The following code includes modification from byt5, see LICENSE.
 
 import os
 cuda_devices = os.environ["CUDA_VISIBLE_DEVICES"]
@@ -142,11 +131,36 @@ def mesh_train_dataset_fn(
   return ds
 
 
+# from tokenizer import ByT5KoreanTokenizer
+# tokenizer = ByT5KoreanTokenizer()
+
+import torch
+from torch.utils.data import IterableDataset, DataLoader
+
+class MyIterableDataset(IterableDataset):
+    def __init__(self, mixture_or_task_name='byt5_korean.ko', input_length=1024, target_length=189):
+        print('\033[92m' + 'preparing dataset...' + '\033[0m')
+        super(MyIterableDataset).__init__()
+        t5.data.set_tfds_data_dir_override('/data/shared/tfds/')
+        self.ds = mesh_train_dataset_fn(mixture_or_task_name, sequence_length={'inputs': input_length, 'targets': target_length})
+        self.ds_iter = tf.compat.v1.data.make_one_shot_iterator(self.ds)
+        print('\033[92m' + 'dataset ready.' + '\033[0m')
+        
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        example = next(self.ds_iter)
+        return { 'input_ids': torch.tensor(example['inputs'].numpy()), 'labels': torch.tensor(example['targets'].numpy()) }
+
+
 if __name__ == "__main__":
-    t5.data.set_tfds_data_dir_override('/data/shared/tfds/')
-    ds = mesh_train_dataset_fn(mixture_or_task_name='byt5_korean.ko', sequence_length={'inputs': 1024, 'targets': 189})
-    iter = tf.compat.v1.data.make_one_shot_iterator(ds)
+    ds = MyIterableDataset()
+    loader = DataLoader(ds, batch_size=4)
+    for i, batch in enumerate(loader):
+        print(batch)
+        if i == 5:
+            break
     for i in range(10):
-        print(next(iter))
-        print(len(next(iter)['inputs']))
+        print(next(iter(ds)))
     print('Done.')
