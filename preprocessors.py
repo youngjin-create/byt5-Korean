@@ -1,5 +1,5 @@
 import tensorflow.compat.v2 as tf
-from t5.preprocessors import random_spans_helper, random_spans_noise_mask
+from t5.data.preprocessors import random_spans_helper, random_spans_noise_mask
 
 import gin
 gin.parse_config_file('config.gin')

@@ -17,7 +17,7 @@ tokenizer = ByT5KoreanTokenizer()
 # from transformers import AutoTokenizer
 # tokenizer = AutoTokenizer.from_pretrained('google/byt5-small')
 
-from t5.preprocessors import random_spans_helper, random_spans_noise_mask
+from t5.data.preprocessors import random_spans_helper, random_spans_noise_mask
 from preprocessors import noise_span_to_unique_sentinel, nonnoise_span_to_unique_sentinel # customized
 
 import glob
