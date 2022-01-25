@@ -7,6 +7,8 @@ from typing import Optional
 
 # os.environ["WANDB_DISABLED"] = "true"
 
+sys.path = [p for p in sys.path if 'home' not in p]
+
 import torch
 
 import transformers
@@ -24,6 +26,7 @@ from transformers.trainer_utils import get_last_checkpoint
 
 from tokenizer import ByT5KoreanTokenizer
 import dataset
+import dataset_torch
 
 logger = logging.getLogger(__name__)
 
@@ -95,18 +98,21 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
-    train_dataset = dataset.KoreanDataset(evaluate=False)
+    train_dataset = dataset_torch.MyIterableDataset()
+    # train_dataset = dataset.KoreanDataset(evaluate=False)
     eval_dataset = dataset.KoreanDataset(evaluate=True)
 
     tokenizer = ByT5KoreanTokenizer()
     if model_args.pretrain_from_scratch:
         config = AutoConfig.from_pretrained(model_args.pretrain_config_name)
+        config.dropout_rate = 0.0
         model = T5ForConditionalGeneration(config=config)
     else:
         # config = AutoConfig.from_pretrained(model_args.model_name_or_path)
         model = T5ForConditionalGeneration.from_pretrained(model_args.model_name_or_path)#, config=config)
+        # model = T5ForConditionalGeneration.from_pretrained('/data/youngjin/projects/t5-family/myt5/modelhf/pytorch_model')
 
-    model.resize_token_embeddings(len(tokenizer))
+    # model.resize_token_embeddings(len(tokenizer))
 
     if model.config.decoder_start_token_id is None:
         raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
