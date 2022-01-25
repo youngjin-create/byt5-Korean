@@ -1,32 +1,35 @@
 {
     "pretrain_from_scratch": true,
     "pretrain_config_name": "google/byt5-small",
-    "model_name_or_path": "./byT5-Korean-small-256bs-2e-4lrconst-100000steps-ds4-dev",
+    "model_name_or_path": "./byT5-Korean-small-128bs-adafactor-1e-2linear-100000steps-ds-0126-0251",
 
-    "run_name": "byT5-Korean-small-256bs-2e-4lrconst-100000steps-01/11-11:23",
+    "run_name": "byT5-Korean-small-128bs-adafactor-1e-2linear-100000steps-ds-0126-0251",
 
     "do_train": true,
     "do_eval": true,
     "do_predict": true,
-    "output_dir": "./byT5-Korean-small-256bs-2e-4lrconst-100000steps-ds4-dev",
+    "output_dir": "./byT5-Korean-small-128bs-adafactor-1e-2linear-100000steps-ds-0126-0251",
     "overwrite_output_dir": true,
-    "learning_rate": 2e-4,
+
+    "adafactor": true,
+    "learning_rate": 1e-2,
     "lr_scheduler_type": "linear",
     "num_train_epochs": 1,
-    "max_steps": 50000,
+    "max_steps": 100000,
     "warmup_steps": 500,
-    "per_device_train_batch_size": 8,
-    "gradient_accumulation_steps": 4,
-    "per_device_eval_batch_size": 8,
+    "per_device_train_batch_size": 16,
+    "gradient_accumulation_steps": 2,
+    "per_device_eval_batch_size": 16,
     "evaluation_strategy": "steps",
     "logging_steps": 50,
-    "eval_steps": 500,
-    "save_steps": 500,
+    "eval_steps": 1000,
+    "save_steps": 1000,
     "save_total_limit": 3,
     "predict_with_generate": true,
     "load_best_model_at_end": true,
     "ignore_data_skip": true,
+    "seed": 1,
 
     "fp16": true,
-    "deepspeed": "ds_config_zero2_WarmupDecayLR.json"
+    "deepspeed": "ds_config_zero2_Adafactor_hfschedule.json"
 }
