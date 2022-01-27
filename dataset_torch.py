@@ -1,10 +1,20 @@
 
 # The following code includes modification from byt5, see LICENSE.
 
+# we are using tensorflow just for preprocessing (using codes from google/t5)
+# so force to use cpus
 import os
 cuda_devices = os.environ["CUDA_VISIBLE_DEVICES"]
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import tensorflow.compat.v1 as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+for gpu in gpus:
+    tf.config.experimental.set_memory_growth(gpu, True) # prevent tensorflow from pre-allocating memory
+os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
+
+# import tensorflow.compat.v1 as tf
+# tf.config.set_visible_devices([], 'GPU') # disable GPU for tensorflow
+
 
 """Add ByT5 Tasks to registry."""
 import functools
@@ -19,6 +29,7 @@ import t5.data
 import t5.data.tasks
 import tensorflow_datasets as tfds
 
+import preprocessors
 
 MEAN_NOISE_SPAN_LENGTH = 20
 DEFAULT_TEMPERATURE = 1.0 / 0.3
@@ -42,32 +53,56 @@ MC4_LANGS = ['ko'] # byt5-korean
 # =========================== Pretraining Tasks/Mixtures =======================
 # mC4
 for lang in MC4_LANGS:
-  seqio.TaskRegistry.add(
-      "byt5_korean.{}".format(lang.replace("-", "_")),
-      source=seqio.TfdsDataSource(
-          tfds_name="c4/multilingual:3.0.1",
-          splits={
-              "train": lang,
-              "validation": f"{lang}-validation"
-          }),
-      preprocessors=[
-          functools.partial(
-              t5.data.preprocessors.rekey,
-              key_map={
-                  "inputs": None,
-                  "targets": "text"
-              }),
-          seqio.preprocessors.tokenize,
-          seqio.CacheDatasetPlaceholder(),
-          functools.partial(t5.data.preprocessors.span_corruption,
-                            mean_noise_span_length=MEAN_NOISE_SPAN_LENGTH),
-          seqio.preprocessors.append_eos_after_trim,
-      ],
-      output_features=DEFAULT_BYTE_OUTPUT_FEATURES,
-      metric_fns=[])
+    seqio.TaskRegistry.add(
+        "byt5_google.{}".format(lang.replace("-", "_")),
+        source=seqio.TfdsDataSource(
+            tfds_name="c4/multilingual:3.0.1",
+            splits={
+                "train": lang,
+                "validation": f"{lang}-validation"
+            }),
+        preprocessors=[
+            functools.partial(
+                t5.data.preprocessors.rekey,
+                key_map={
+                    "inputs": None,
+                    "targets": "text"
+                }),
+            seqio.preprocessors.tokenize,
+            seqio.CacheDatasetPlaceholder(),
+            functools.partial(t5.data.preprocessors.span_corruption,
+                                mean_noise_span_length=MEAN_NOISE_SPAN_LENGTH),
+            seqio.preprocessors.append_eos_after_trim,
+        ],
+        output_features=DEFAULT_BYTE_OUTPUT_FEATURES,
+        metric_fns=[])
 
 # byt5_korean = ["byt5_korean.{}".format(lang.replace("-", "_")) for lang in MC4_LANGS]
 # seqio.MixtureRegistry.add("byt5_korean", byt5_korean, default_rate=DEFAULT_MIX_RATE)
+
+for lang in MC4_LANGS:
+    seqio.TaskRegistry.add(
+        "byt5_extra.{}".format(lang.replace("-", "_")),
+        source=seqio.TfdsDataSource(
+            tfds_name="c4/multilingual:3.0.1",
+            splits={
+                "train": lang,
+                "validation": f"{lang}-validation"
+            }),
+        preprocessors=[
+            functools.partial(
+                t5.data.preprocessors.rekey,
+                key_map={
+                    "inputs": None,
+                    "targets": "text"
+                }),
+            seqio.preprocessors.tokenize,
+            seqio.CacheDatasetPlaceholder(),
+            functools.partial(preprocessors.span_corruption, mean_noise_span_length=MEAN_NOISE_SPAN_LENGTH, sentinel_start=259, sentinel_inc=1),
+            seqio.preprocessors.append_eos_after_trim,
+        ],
+        output_features=DEFAULT_BYTE_OUTPUT_FEATURES,
+        metric_fns=[])
 
 import mesh_tensorflow.transformer.dataset as transformer_dataset
 
@@ -138,11 +173,11 @@ import torch
 from torch.utils.data import IterableDataset, DataLoader
 
 class MyIterableDataset(IterableDataset):
-    def __init__(self, mixture_or_task_name='byt5_korean.ko', input_length=1024, target_length=189):
+    def __init__(self, mixture_or_task_name='byt5_google.ko', input_length=1024, target_length=189):
         print('\033[92m' + 'preparing dataset...' + '\033[0m')
         super(MyIterableDataset).__init__()
         t5.data.set_tfds_data_dir_override('/data/shared/tfds/')
-        self.ds = mesh_train_dataset_fn(mixture_or_task_name, sequence_length={'inputs': input_length, 'targets': target_length})
+        self.ds = mesh_train_dataset_fn(mixture_or_task_name, sequence_length={'inputs': input_length, 'targets': target_length}, shuffle=True, seed=1)
         self.ds_iter = tf.compat.v1.data.make_one_shot_iterator(self.ds)
         print('\033[92m' + 'dataset ready.' + '\033[0m')
         
@@ -155,8 +190,8 @@ class MyIterableDataset(IterableDataset):
 
 
 if __name__ == "__main__":
-    ds = MyIterableDataset()
-    loader = DataLoader(ds, batch_size=4)
+    ds = MyIterableDataset(mixture_or_task_name='byt5_extra.ko')
+    loader = DataLoader(ds, batch_size=8)
     for i, batch in enumerate(loader):
         print(batch)
         if i == 5:

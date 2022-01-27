@@ -1,10 +1,50 @@
+import functools
+
 import tensorflow.compat.v2 as tf
-from t5.data.preprocessors import random_spans_helper, random_spans_noise_mask
+from t5.data.preprocessors import select_random_chunk, reduce_concat_tokens, split_tokens, denoise, random_spans_helper, random_spans_noise_mask
 
 import gin
 gin.parse_config_file('config.gin')
 
-def noise_span_to_unique_sentinel(tokens, noise_mask, sentinel_id, extra_ids_increment=1):
+def span_corruption(dataset, sequence_length, output_features,
+                    mean_noise_span_length=3.0, noise_density=0.15, sentinel_start=258, sentinel_inc=-1):
+  """Final pretraining objective used in Raffel et al., 2019."""
+  input_length, targets_length = random_spans_helper(
+      extra_tokens_per_span_inputs=1,
+      extra_tokens_per_span_targets=1,
+      inputs_length=sequence_length['inputs'],
+      mean_noise_span_length=mean_noise_span_length,
+      noise_density=noise_density)
+
+  if sequence_length['targets'] < targets_length:
+    raise ValueError(
+        f'Expected targets length for span corruption ({targets_length}) is '
+        f'greater than configured targets length '
+        f"({sequence_length['targets']})")
+
+  ds = dataset
+  ds = select_random_chunk(ds, output_features=output_features,
+                           feature_key='targets', max_length=65536)
+  ds = reduce_concat_tokens(ds, feature_key='targets', batch_size=128)
+  ds = split_tokens(
+      ds,
+      feature_key='targets',
+      min_tokens_per_segment=None,
+      max_tokens_per_segment=input_length)
+  ds = denoise(
+      ds,
+      output_features,
+      inputs_fn=functools.partial(noise_span_to_unique_sentinel, sentinel_start=sentinel_start, sentinel_inc=sentinel_inc),
+      targets_fn=functools.partial(nonnoise_span_to_unique_sentinel, sentinel_start=sentinel_start, sentinel_inc=sentinel_inc),
+      noise_density=noise_density,
+      noise_mask_fn=functools.partial(
+          random_spans_noise_mask,
+          mean_noise_span_length=mean_noise_span_length
+      )
+  )
+  return ds
+
+def noise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, seeds, sentinel_start, sentinel_inc=1):
     """Replace each run of consecutive noise tokens with a different sentinel.
 
     The idea here is to be able to align the dropped spans in the inputs
@@ -35,15 +75,17 @@ def noise_span_to_unique_sentinel(tokens, noise_mask, sentinel_id, extra_ids_inc
         noise_mask, tf.logical_not(prev_token_is_noise))
     subsequent_noise_tokens = tf.logical_and(noise_mask, prev_token_is_noise)
 
-    sentinel = sentinel_id + extra_ids_increment * (-1 + tf.cumsum(
+    sentinel = sentinel_start + sentinel_inc * (-1 + tf.cumsum(
         tf.cast(first_noise_tokens, tokens.dtype)))
 
     tokens = tf.where(first_noise_tokens, sentinel, tokens)
     return tf.boolean_mask(tokens, tf.logical_not(subsequent_noise_tokens))
 
-def nonnoise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, extra_ids_increment=1):
+def nonnoise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, seeds, sentinel_start, sentinel_inc=1):
     return noise_span_to_unique_sentinel(
-        tokens, tf.logical_not(noise_mask), vocabulary, extra_ids_increment)
+        tokens, tf.logical_not(noise_mask), vocabulary, seeds, sentinel_start, sentinel_inc)
+
+
 
 def random_span_masking(ids,
                         noise_density,
