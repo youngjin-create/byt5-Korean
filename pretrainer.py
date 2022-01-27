@@ -18,6 +18,7 @@ from transformers import (
     T5ForConditionalGeneration,
     T5Tokenizer, AutoTokenizer,
     DataCollatorForSeq2Seq,
+    Adafactor,
     Seq2SeqTrainingArguments, TrainingArguments,
     Seq2SeqTrainer, Trainer,
     set_seed,
@@ -117,6 +118,18 @@ def main():
     if model.config.decoder_start_token_id is None:
         raise ValueError("Make sure that `config.decoder_start_token_id` is correctly defined")
 
+    # Configure optimizer
+    custom_optimizer = None
+    if training_args.deepspeed and training_args.adafactor: # and not training_args.sharded_ddp:
+        optimizer_grouped_parameters = []
+        for _, p in model.named_parameters():
+            optimizer_grouped_parameters.append({
+                "params": [p],
+                "weight_decay": 0.0,
+            })
+        optimizer_kwargs = {"lr": training_args.learning_rate, "scale_parameter": True, "relative_step": False}
+        custom_optimizer = Adafactor(optimizer_grouped_parameters, **optimizer_kwargs)
+
     # Initialize our Trainer
     trainer = Seq2SeqTrainer(
         model=model,
@@ -124,6 +137,7 @@ def main():
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
+        optimizers=(custom_optimizer, None)
     )
 
     # Training
