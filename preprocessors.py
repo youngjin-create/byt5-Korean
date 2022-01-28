@@ -44,7 +44,7 @@ def span_corruption(dataset, sequence_length, output_features,
   )
   return ds
 
-def noise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, seeds, sentinel_start, sentinel_inc=1):
+def noise_span_to_unique_sentinel(tokens, noise_mask, vocabulary=None, seeds=None, sentinel_start=258, sentinel_inc=-1):
     """Replace each run of consecutive noise tokens with a different sentinel.
 
     The idea here is to be able to align the dropped spans in the inputs
@@ -81,7 +81,7 @@ def noise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, seeds, sentine
     tokens = tf.where(first_noise_tokens, sentinel, tokens)
     return tf.boolean_mask(tokens, tf.logical_not(subsequent_noise_tokens))
 
-def nonnoise_span_to_unique_sentinel(tokens, noise_mask, vocabulary, seeds, sentinel_start, sentinel_inc=1):
+def nonnoise_span_to_unique_sentinel(tokens, noise_mask, vocabulary=None, seeds=None, sentinel_start=258, sentinel_inc=-1):
     return noise_span_to_unique_sentinel(
         tokens, tf.logical_not(noise_mask), vocabulary, seeds, sentinel_start, sentinel_inc)
 

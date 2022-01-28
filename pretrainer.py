@@ -103,10 +103,12 @@ def main():
     set_seed(training_args.seed)
 
     print(model_args.tokenizer_name)
-    if model_args.tokenizer_name == "utf8-extra":
-        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='byt5_extra.ko') # sentinel_ids = [259, 260, 261, ...], modified encoding
+    if model_args.tokenizer_name == "utf8-google":
+        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='google.ko') # sentinel_ids = [258, 257, 256, ...], original byt5 encoding
+    elif model_args.tokenizer_name == "utf8-extra":
+        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='extra.ko') # sentinel_ids = [259, 260, 261, ...], modified encoding
     else:
-        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='byt5_google.ko') # sentinel_ids = [258, 257, 256, ...], original byt5 encoding
+        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='byt5_korean.ko')
     # train_dataset = dataset.KoreanDataset(evaluate=False)
     eval_dataset = dataset.KoreanDataset(evaluate=True)
 

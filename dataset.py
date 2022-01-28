@@ -37,8 +37,8 @@ extra_tokens_per_span_targets = 1
 
 def random_span_masking(ids, noise_density, seeds, sentinel_id, extra_ids_increment, mean_noise_span_length):
     noise_mask = random_spans_noise_mask(tf.size(ids), noise_density, seeds, mean_noise_span_length)
-    input_ids = noise_span_to_unique_sentinel(ids, noise_mask, sentinel_id, extra_ids_increment)
-    labels = nonnoise_span_to_unique_sentinel(ids, noise_mask, sentinel_id, extra_ids_increment)
+    input_ids = noise_span_to_unique_sentinel(ids, noise_mask, sentinel_start=sentinel_id, sentinel_inc=extra_ids_increment)
+    labels = nonnoise_span_to_unique_sentinel(ids, noise_mask, sentinel_start=sentinel_id, sentinel_inc=extra_ids_increment)
     return input_ids, labels
 
 def add_eos(ids, eos_id=1):
@@ -111,8 +111,8 @@ class KoreanDataset(Dataset):
             record = next(self.records)['text']
 
         ids = tokenizer(record, padding=True, truncation=True, max_length=tokens_length, add_special_tokens=False).input_ids
-        input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259, 1, mean_noise_span_length)
-        # input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 258, -1, mean_noise_span_length) # google style
+        # input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259, 1, mean_noise_span_length)
+        input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 258, -1, mean_noise_span_length) # google style
         input_ids = add_eos(input_ids)
         labels = add_eos(labels)
 

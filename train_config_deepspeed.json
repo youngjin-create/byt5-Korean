@@ -1,15 +1,15 @@
 {
     "pretrain_from_scratch": true,
     "pretrain_config_name": "google/byt5-small",
-    "model_name_or_path": "./byt5-extra-small-128bs-adafactor-1e-2linear-100000steps-ds-0127-2315",
-    "tokenizer_name": "utf8-extra",
+    "model_name_or_path": "./byt5-korean-small-128bs-adafactor-1e-2linear-100000steps-ds-0128-1930",
+    "tokenizer_name": "utf8-korean",
 
-    "run_name": "byt5-extra-small-128bs-adafactor-1e-2linear-100000steps-ds-0127-2315",
+    "run_name": "byt5-korean-small-128bs-adafactor-1e-2linear-100000steps-ds-0128-1930",
 
     "do_train": true,
     "do_eval": true,
     "do_predict": true,
-    "output_dir": "./byt5-extra-small-128bs-adafactor-1e-2linear-100000steps-ds-0127-2315",
+    "output_dir": "./byt5-korean-small-128bs-adafactor-1e-2linear-100000steps-ds-0128-1930",
     "overwrite_output_dir": true,
 
     "adafactor": true,
@@ -18,9 +18,9 @@
     "num_train_epochs": 1,
     "max_steps": 100000,
     "warmup_steps": 500,
-    "per_device_train_batch_size": 8,
-    "gradient_accumulation_steps": 4,
-    "per_device_eval_batch_size": 8,
+    "per_device_train_batch_size": 16,
+    "gradient_accumulation_steps": 2,
+    "per_device_eval_batch_size": 16,
     "evaluation_strategy": "steps",
     "logging_steps": 50,
     "eval_steps": 1000,
