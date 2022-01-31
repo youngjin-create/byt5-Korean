@@ -19,15 +19,12 @@ import warnings
 from typing import Dict, List, Optional, Tuple
 
 from transformers.tokenization_utils import AddedToken, PreTrainedTokenizer
-# from ...utils import logging
-
-
-# logger = logging.get_logger(__name__)
-
+from transformers.models.byt5.tokenization_byt5 import ByT5Tokenizer
 
 class ByT5KoreanTokenizer(PreTrainedTokenizer):
     """
-    Construct a ByT5 tokenizer. ByT5 simply uses raw bytes utf-8 encoding.
+    Construct a ByT5Korean tokenizer.
+    On top of ByT5's simple raw bytes utf-8 encoding, ByT5Korean adds extra tokens for Korean jamo.
 
     This tokenizer inherits from :class:`~transformers.PreTrainedTokenizer` which contains most of the main methods.
     Users should refer to this superclass for more information regarding those methods.
@@ -62,7 +59,7 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
         eos_token="</s>",
         unk_token="<unk>",
         pad_token="<pad>",
-        extra_ids=125,
+        extra_ids=57,
         additional_special_tokens=None,
         **kwargs
     ) -> None:
@@ -98,6 +95,7 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
             self.tokens_trie.add(token)
 
         self._utf_vocab_size = 2 ** 8  # utf is 8 bits
+        self._utf_vocab_size += 19 + 21 + 28  # korean jamo
 
         # define special tokens dict
         self.special_tokens_encoder: Dict[int, str] = {
@@ -201,13 +199,21 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
             token_ids_1 = self._add_eos_if_not_present(token_ids_1)
             return token_ids_0 + token_ids_1
 
+    def _convert_char_to_tokens_Korean(self, c):
+        o = ord(c)
+        if 44032 <= o and o <= 55203: # 44032: 가, 55203: 힣 
+            o -= 44032
+            return [chr(256 + (o // 588)), chr(256 + 19 + ((o % 588) // 28)), chr(256 + 19 + 21 + (o % 28))]
+        return [chr(i) for i in c.encode("utf-8")]
+
     def _tokenize(self, text: str) -> List[str]:
         """Take as input a string and return a list of strings (tokens) for words/sub-words"""
         if text in self.all_special_tokens:
             return [text]
             # return [self.special_tokens_encoder[text]]
-        tokens = [chr(i) for i in text.encode("utf-8")]
-        return tokens
+        # tokens = [chr(i) for i in text.encode("utf-8")]
+        # return tokens
+        return sum([self._convert_char_to_tokens_Korean(c) for c in text], [])
 
     def _convert_token_to_id(self, token):
         """Converts a token (str) in an id using the vocab."""
@@ -215,6 +221,8 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
             token_id = self.special_tokens_encoder[token]
         elif token in self.added_tokens_encoder:
             token_id = self.added_tokens_encoder[token]
+        # else:
+            # token_id = token + self._num_special_tokens
         elif len(token) != 1:
             token_id = self.unk_token_id
         else:
@@ -242,18 +250,23 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
             elif token in self.added_tokens_encoder:
                 tok_string = token.encode("utf-8")
             else:
-                tok_string = bytes([ord(token)])
+                if type(token) == str and ord(token) >= 256:
+                    tok_string = token.encode("utf-8")
+                else:
+                    # converting tokes to string, not implemented yet for Korean
+                    tok_string = bytes([ord(token) if type(token) == str else min(255, token)])
             bstring += tok_string
         string = bstring.decode("utf-8", errors="ignore")
         return string
 
-    # ByT5Tokenizer has no vocab file
+    # ByT5KoreanTokenizer has no vocab file
     def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
         return ()
 
+
 if __name__ == "__main__":
     tokenizer = ByT5KoreanTokenizer()
-    text = "This is a test <extra_id_0> of the 안녕하세요 <extra_id_1>."
+    text = "This is a test <extra_id_0> of the 가나힣 안녕하세요 <extra_id_1>."
     tokenized_text = tokenizer.tokenize(text)
     print(tokenized_text)
     print(tokenizer(text))
