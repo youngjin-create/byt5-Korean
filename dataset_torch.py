@@ -216,7 +216,7 @@ KOREAN_BYTE_OUTPUT_FEATURES = {
 }
 
 MC4_LANGS = tfds.text.c4.MC4_LANGUAGES
-MC4_LANGS = ['ko'] # byt5-korean
+MC4_LANGS = ['ko', 'en50'] # byt5-korean
 
 # =========================== Pretraining Tasks/Mixtures =======================
 # mC4
@@ -244,9 +244,6 @@ for lang in MC4_LANGS:
         ],
         output_features=DEFAULT_BYTE_OUTPUT_FEATURES,
         metric_fns=[])
-
-# byt5_korean = ["byt5_korean.{}".format(lang.replace("-", "_")) for lang in MC4_LANGS]
-# seqio.MixtureRegistry.add("byt5_korean", byt5_korean, default_rate=DEFAULT_MIX_RATE)
 
 for lang in MC4_LANGS:
     seqio.TaskRegistry.add(
@@ -295,6 +292,12 @@ for lang in MC4_LANGS:
         ],
         output_features=KOREAN_BYTE_OUTPUT_FEATURES,
         metric_fns=[])
+
+byt5_korean = ["byt5_korean.{}".format(lang.replace("-", "_")) for lang in MC4_LANGS]
+def mixing_rates(task):
+  rates = {'byt5_korean.ko': 0.7, 'byt5_korean.en50': 0.3}
+  return rates[task.name]
+seqio.MixtureRegistry.add("byt5_korean", byt5_korean, default_rate=mixing_rates)
 
 import mesh_tensorflow.transformer.dataset as transformer_dataset
 
@@ -384,7 +387,9 @@ class MyIterableDataset(IterableDataset):
 if __name__ == "__main__":
     # ds = MyIterableDataset(mixture_or_task_name='byt5_google.ko')
     # ds = MyIterableDataset(mixture_or_task_name='byt5_extra.ko')
-    ds = MyIterableDataset(mixture_or_task_name='byt5_korean.ko')
+    # ds = MyIterableDataset(mixture_or_task_name='byt5_korean.ko')
+    # ds = MyIterableDataset(mixture_or_task_name='byt5_korean.en50')
+    ds = MyIterableDataset(mixture_or_task_name='byt5_korean')
     loader = DataLoader(ds, batch_size=8)
     for i, batch in enumerate(loader):
         print(batch)
