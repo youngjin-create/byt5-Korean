@@ -16,7 +16,7 @@
 
 
 import warnings
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from transformers.tokenization_utils import AddedToken, PreTrainedTokenizer
 from transformers.models.byt5.tokenization_byt5 import ByT5Tokenizer
@@ -240,7 +240,15 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
     def convert_tokens_to_string(self, tokens):
         """Converts a sequence of tokens (string) in a single string."""
         bstring = b""
+        ids = [ord(t[0]) for t in tokens]
+        for i in range(len(ids)-2):
+            if 256 <= ids[i] and ids[i] < 256+19 and 256+19 <= ids[i+1] and ids[i+1] < 256+19+21 and 256+19+21 <= ids[i+2] and ids[i+2] < 256+19+21+28:
+                tokens[i] = chr(44032 + (ids[i]-256)*21*28 + (ids[i+1]-256-19)*28 + (ids[i+2]-256-19-21))
+                tokens[i+1] = None
+                tokens[i+2] = None
         for token in tokens:
+            if token == None:
+                continue
             if token in self.special_tokens_decoder:
                 tok_string = self.special_tokens_decoder[token].encode("utf-8")
             elif token in self.added_tokens_decoder:
@@ -253,7 +261,6 @@ class ByT5KoreanTokenizer(PreTrainedTokenizer):
                 if type(token) == str and ord(token) >= 256:
                     tok_string = token.encode("utf-8")
                 else:
-                    # converting tokes to string, not implemented yet for Korean
                     tok_string = bytes([ord(token) if type(token) == str else min(255, token)])
             bstring += tok_string
         string = bstring.decode("utf-8", errors="ignore")
