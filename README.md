@@ -17,7 +17,7 @@ id: token
 2: <unk>
 3~258: utf-8 encoding
 259~277: beginning consonants(초성), 19개(ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ)
-279~298: middle vowel(중성), 21개(ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ)
+278~298: middle vowel(중성), 21개(ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ)
 299~326: final consonant(종성), 무종성+27개(ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ)
 327~384: from <extra_id_0> to <extra_id_57>
 ```
