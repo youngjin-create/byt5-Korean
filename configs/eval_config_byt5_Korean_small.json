@@ -1,0 +1,15 @@
+{
+    "pretrain_from_scratch": false,
+    "model_name_or_path": "everdoubling/byt5-Korean-small",
+    "tokenizer_name": "utf8-korean",
+
+    "run_name": "everdoubling/byt5-Korean-small-eval",
+
+    "do_train": false,
+    "do_eval": true,
+    "do_predict": true,
+    "output_dir": "models/byt5-Korean-small-eval",
+
+    "per_device_eval_batch_size": 16,
+    "predict_with_generate": true
+}

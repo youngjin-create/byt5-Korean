@@ -1,0 +1,15 @@
+{
+    "pretrain_from_scratch": false,
+    "model_name_or_path": "google/byt5-small",
+    "tokenizer_name": "utf8-google",
+
+    "run_name": "google/byt5-small-eval",
+
+    "do_train": false,
+    "do_eval": true,
+    "do_predict": true,
+    "output_dir": "models/byt5-small-eval",
+
+    "per_device_eval_batch_size": 16,
+    "predict_with_generate": true
+}
