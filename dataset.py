@@ -16,9 +16,9 @@ import torch
 from torch.utils.data import Dataset
 
 from tokenizer import ByT5KoreanTokenizer
-tokenizer = ByT5KoreanTokenizer()
-# from transformers import AutoTokenizer
-# tokenizer = AutoTokenizer.from_pretrained('google/byt5-small')
+tokenizer_jamo = ByT5KoreanTokenizer()
+from transformers import AutoTokenizer
+tokenizer_google = AutoTokenizer.from_pretrained('google/byt5-small')
 
 from t5.data.preprocessors import random_spans_helper, random_spans_noise_mask
 from preprocessors import noise_span_to_unique_sentinel, nonnoise_span_to_unique_sentinel # customized
@@ -92,8 +92,9 @@ def get_train_record(files = '/data/shared/c4/c4/multilingual/c4-ko.tfrecord-*.g
 # ids_eval = ids[int(len(ids)*0.8):]
 
 class KoreanDataset(Dataset):
-    def __init__(self, evaluate: bool = False):
+    def __init__(self, evaluate: bool = False, tokenizer_name: str = 'utf8-korean'):
         self.evaluate = evaluate
+        self.tokenizer_name = tokenizer_name
         self.records = get_train_record() if not evaluate else (record for record in c4_ko_eval)
         return
 
@@ -110,9 +111,14 @@ class KoreanDataset(Dataset):
         else:
             record = next(self.records)['text']
 
-        ids = tokenizer(record, padding=True, truncation=True, max_length=tokens_length, add_special_tokens=False).input_ids
-        # input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259, 1, mean_noise_span_length)
-        input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 258, -1, mean_noise_span_length) # google style
+        if self.tokenizer_name == 'utf8-korean':
+            ids = tokenizer_jamo(record, padding=True, truncation=True, max_length=tokens_length, add_special_tokens=False).input_ids
+            input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259 + 19 + 21 + 28, 1, mean_noise_span_length) # byt5-korean encoding
+        else:
+            ids = tokenizer_google(record, padding=True, truncation=True, max_length=tokens_length, add_special_tokens=False).input_ids
+            input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 258, -1, mean_noise_span_length) # google style
+            # input_ids, labels = random_span_masking(tf.constant(ids), noise_density, [(i, i), (i, i)], 259, 1, mean_noise_span_length) # huggingface style: explicit extra ids
+
         input_ids = add_eos(input_ids)
         labels = add_eos(labels)
 

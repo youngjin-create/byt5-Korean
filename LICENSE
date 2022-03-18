@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-This project includes codes from t5, mt5, and byt5 repositories which are licensed under the Apache-2.0 license (see LICENSE-Apache-2.0):
+This project includes codes from the following repositories which are licensed under the Apache-2.0 license (see LICENSE-Apache-2.0):
 [t5] https://github.com/google-research/text-to-text-transfer-transformer
 [mt5] https://github.com/google-research/multilingual-t5
 [byt5] https://github.com/google-research/byt5

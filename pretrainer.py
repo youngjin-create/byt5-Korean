@@ -37,15 +37,18 @@ class ModelArguments:
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
 
-    model_name_or_path: str = field(
-        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    model_name_or_path: Optional[str] = field(
+        default="google/byt5-small", metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     pretrain_config_name: Optional[str] = field(
         default=None, metadata={"help": "Config name for pretraining"}
     )
     pretrain_from_scratch: bool = field(default=True, metadata={"help": "Whether to pretrain from scratch"})
+    dataset_train: Optional[str] = field(
+        default="byt5_korean", metadata={"help": "Dataset for training"}
+    )
     tokenizer_name: Optional[str] = field(
-        default="utf8-google", metadata={"help": "Tokenizer name", "choices": ["utf8-google", "utf8-extra", "utf8-korean"]}
+        default="utf8-korean", metadata={"help": "Tokenizer name", "choices": ["utf8-google", "utf8-extra", "utf8-korean"]}
     )
 
 def main():
@@ -102,15 +105,20 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
-    print(model_args.tokenizer_name)
-    if model_args.tokenizer_name == "utf8-google":
-        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='google.ko') # sentinel_ids = [258, 257, 256, ...], original byt5 encoding
-    elif model_args.tokenizer_name == "utf8-extra":
-        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='extra.ko') # sentinel_ids = [259, 260, 261, ...], modified encoding
+    print(model_args.dataset_train)
+    if training_args.do_train:
+        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name=model_args.dataset_train)
     else:
-        train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='byt5_korean.ko')
+        train_dataset = None
+    # print(model_args.tokenizer_name)
+    # if model_args.tokenizer_name == "utf8-google":
+    #     train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='google.ko') # sentinel_ids = [258, 257, 256, ...], original byt5 encoding
+    # elif model_args.tokenizer_name == "utf8-extra":
+    #     train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='extra.ko') # sentinel_ids = [259, 260, 261, ...], modified encoding
+    # else:
+    #     train_dataset = dataset_torch.MyIterableDataset(mixture_or_task_name='byt5_korean.ko')
     # train_dataset = dataset.KoreanDataset(evaluate=False)
-    eval_dataset = dataset.KoreanDataset(evaluate=True)
+    eval_dataset = dataset.KoreanDataset(evaluate=True, tokenizer_name=model_args.tokenizer_name)
 
     tokenizer = ByT5KoreanTokenizer()
     if model_args.pretrain_from_scratch:

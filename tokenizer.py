@@ -1,5 +1,6 @@
 # coding=utf-8
-# Copyright 2021 T5 Authors and HuggingFace Inc. team.
+#
+# Everdoubling LLC.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# The following code is modified from HuggingFace's ByT5 Tokenizer: transformers/models/byt5/tokenization_byt5.py
+#
 """ Tokenization class for model ByT5."""
 
 

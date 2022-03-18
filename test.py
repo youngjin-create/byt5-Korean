@@ -23,11 +23,12 @@ tokenizer_hf = AutoTokenizer.from_pretrained('google/byt5-small')
 #   328~384 <extra_id_0>~<extra_id_56>
 tokenizer_jamo = ByT5KoreanTokenizer()
 
-model_google = T5ForConditionalGeneration.from_pretrained('google/byt5-small')
-model_jamo = T5ForConditionalGeneration.from_pretrained('/data/youngjin/projects/byt5-Korean/models/byt5-korean-ko7en3-large-128bs-adafactor-1e-2linear-100000steps-ds-0214-1201/checkpoint-100000')
+model_google = T5ForConditionalGeneration.from_pretrained('google/byt5-large')
+# model_jamo = T5ForConditionalGeneration.from_pretrained('/data/youngjin/projects/byt5-Korean/models/byt5-korean-ko7en3-large-128bs-adafactor-1e-2linear-100000steps-ds-0214-1201/checkpoint-100000')
+model_jamo = T5ForConditionalGeneration.from_pretrained('everdoubling/byt5-Korean-large')
 
 # input_ids_hf = tokenizer_hf("에버더블링은 서울에 위치한 <extra_id_0>으로 한국어를 자모 단위로 학습하는 언어 모델을 <extra_id_1>하였습니다.").input_ids
-input_sentence = '한국어 위키백과(영어: Korean Wikipedia)는 한국어로 운영되는 위키백과의 다언어판 가운데 하나로서, 2002년 10월 11일에 <extra_id_0>. 또한 현재 한국어 위키백과에는 넘겨주기, 토론, 그림 등 페이지로 불리는 모든 문서를 포함하면 총 2,629,860개가 수록되어 있으며, 넘겨주기를 포함한 일반 <extra_id_1> 수는 1,278,560개,[1] 그중 넘겨주기, 막다른 문서를 제외한 일반 문서 수는 573,149개이다.'
+input_sentence = '한국어 위키백과(영어: Korean Wikipedia)는 한국어로 운영되는 위키백과의 다언어판 가운데 하나로서, 2002년 10월 11일에 <extra_id_0>. 또한 현재 한국어 위키백과에는 넘겨주기, 토론, 그림 등 페이지로 불리는 모든 문서를 포함하면 총 2,629,860개가 <extra_id_1>되어 있으며, 넘겨주기를 포함한 일반 문서 수는 1,278,560개,[1] 그중 넘겨주기, 막다른 문서를 제외한 일반 문서 수는 573,149개이다.'
 
 input_ids_hf = tokenizer_hf(input_sentence).input_ids
 input_ids_google = [x if x<=258 else 258-(x-259) for x in input_ids_hf]
