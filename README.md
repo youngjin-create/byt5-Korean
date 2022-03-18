@@ -7,16 +7,26 @@ Google이 공개한 T5(+mesh_tensorflow) 기반의 코드를 이용해서 학습
 2022-03-04 Huggingface에 large 모델 공개
 
 ## Byte encoding for Korean
+
+ByT5Korean 모델은 한국어 자모별로 하나의 토큰을 할당합니다.
+
 ```text
 id: token
 0: <pad>
-1: <unk>
-2: <eos>
+1: <eos>
+2: <unk>
 3~258: utf-8 encoding
-259~277: beginning consonants(초성), from ㄱ to ㅎ
-279~299: middle vowel(중성), from ㅏ to ㅣ
-300~327: final consonant(종성), None, from ㄱ to ㅎ
-328~384: from <extra_id_0> to <extra_id_56>
+259~277: beginning consonants(초성), 19개(ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ)
+278~298: middle vowel(중성), 21개(ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ)
+299~326: final consonant(종성), 무종성+27개(ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ)
+327~384: from <extra_id_0> to <extra_id_57>
+```
+
+ByT5KoreanTokenizer.py 파일에 토크나이저가 구현되어 있습니다. 실행 예는 다음과 같습니다.
+```python
+tokenizer_jamo = ByT5KoreanTokenizer()
+print(tokenizer_jamo('가힣abc 안녕하세요')['input_ids'])
+# [259, 278, 299, 277, 298, 326, 100, 101, 102, 35, 270, 278, 303, 261, 284, 320, 277, 278, 299, 268, 283, 299, 270, 290, 299, 1]
 ```
 
 ## Dataset
